@@ -4,7 +4,7 @@ Small project about different methods to use parallel processing to hash images.
 
 [Parallel Image Hash](Parallel_ImageHash.py) uses three different techniques to achieve a speedup on image hashing. 
 
-# Technique 1: Processes
+## Technique 1: Processes
 Every processor on the CPU (or any number below that, as can be changed in code) takes an equal number of images and hashes them. The second fastest technique.
 
 # Technique 2: Threads
