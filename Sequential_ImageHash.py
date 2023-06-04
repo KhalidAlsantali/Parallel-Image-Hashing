@@ -16,12 +16,12 @@ def process_images(payload):
 
     for imagePath in payload:
         image = Image.open(imagePath)
-        h = imagehash.average_hash(image)
-        h = convert_hash(h)
+        image_hash = imagehash.average_hash(image)
+        image_hash = convert_hash(image_hash)
 
-        l = hashes.get(h, [])
-        l.append(imagePath)
-        hashes[h] = l
+        hash_list = hashes.get(image_hash, [])
+        hash_list.append(imagePath)
+        hashes[image_hash] = hash_list
 
     print("process {} serializing".format("seq"))
     f = open("output\\process_seq.json", "w")
@@ -32,7 +32,7 @@ def process_images(payload):
 if __name__ == "__main__":
     start_time = time.time()
     print("grabbing image paths")
-    allImagePaths = sorted(list(paths.list_images('101_ObjectCategories')))
+    allImagePaths = sorted(list(paths.list_images('Input_Images')))
     print("waiting for procs to finish...")
     process_images(allImagePaths)
     print("time taken")

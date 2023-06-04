@@ -1,25 +1,50 @@
 import json
+import os
+import shutil
+import threading
 import time
-from PIL import Image
-import imagehash
 from multiprocessing import Pool
 from multiprocessing import cpu_count
-from imutils import paths
+import imagehash
 import numpy as np
-import os, shutil
-import threading
+from PIL import Image
+from imutils import paths
 
 
-def chunk(l, n):
-    for i in range(0, len(l), n):
-        yield l[i: i + n]
+#   This function takes a list of yields subsets of that chunks according to input length.
+def chunk(input_list, length_of_chunk):
+    for iterator in range(0, len(input_list), length_of_chunk):
+        yield input_list[iterator: iterator + length_of_chunk]
 
 
+#   Return hash as string
 def convert_hash(h):
     return str(np.array(h))
 
 
-def process_images_threads(payload):
+#   This function is called once per process/thread in techniques 1 and 2 and hashes the images its given and returns a list of the hashes.
+def process_images(payload):
+    print("Starting Process {}".format(payload["id"]))
+    hashes = {}
+
+    for imagePath in payload["input_paths"]:
+        image = Image.open(imagePath)
+        image_hash = imagehash.average_hash(image)
+        image_hash = convert_hash(image_hash)
+
+        hash_list = hashes.get(image_hash, [])
+        hash_list.append(imagePath)
+        hashes[image_hash] = hash_list
+
+    print("Process {} Serializing".format(payload["id"]))
+    f = open(payload["output_path"], "w")
+    f.write(json.dumps(hashes))
+    f.close()
+
+
+#   This function is used for technique 3 using both threads and processes.
+#   Each process calls the process_images_per_thread with the number of threads per process which in turn splits and hashes the images accordingly.
+def process_images_processes_threads(payload):
     print("starting thread {}".format(payload["id"]))
 
     # CHANGE NUMBER OF THREADS PER PROCESS HERE
@@ -31,10 +56,10 @@ def process_images_threads(payload):
 
     thread_payloads = []
 
-    for (i, image_paths) in enumerate(chunked_paths):
-        output_path = os.path.sep.join(["output", "proc_{}_thread_{}.json".format(i, threading.current_thread().ident)])
+    for (iterator, image_paths) in enumerate(chunked_paths):
+        output_path = os.path.sep.join(["output", "proc_{}_thread_{}.json".format(iterator, threading.current_thread().ident)])
         data_t = {
-            "id": i,
+            "id": iterator,
             "input_paths": image_paths,
             "output_path": output_path
         }
@@ -42,7 +67,7 @@ def process_images_threads(payload):
 
     threads = []
     for payload in thread_payloads:
-        thread = threading.Thread(target=process_images_2, args=(payload,))
+        thread = threading.Thread(target=process_images_per_thread, args=(payload,))
         threads.append(thread)
 
     print(threads)
@@ -53,7 +78,8 @@ def process_images_threads(payload):
         thread.join()
 
 
-def process_images_2(payload):
+#   This function process images and is called once for every thread in every process for technique 3.
+def process_images_per_thread(payload):
     print("starting process {}".format(payload["id"]))
     hashes = {}
 
@@ -61,31 +87,12 @@ def process_images_2(payload):
 
     for imagePath in payload["input_paths"]:
         image = Image.open(imagePath)
-        h = imagehash.average_hash(image)
-        h = convert_hash(h)
+        image_hash = imagehash.average_hash(image)
+        image_hash = convert_hash(image_hash)
 
-        l = hashes.get(h, [])
-        l.append(imagePath)
-        hashes[h] = l
-
-    print("Process {} Serializing".format(payload["id"]))
-    f = open(payload["output_path"], "w")
-    f.write(json.dumps(hashes))
-    f.close()
-
-
-def process_images(payload):
-    print("Starting Process {}".format(payload["id"]))
-    hashes = {}
-
-    for imagePath in payload["input_paths"]:
-        image = Image.open(imagePath)
-        h = imagehash.average_hash(image)
-        h = convert_hash(h)
-
-        l = hashes.get(h, [])
-        l.append(imagePath)
-        hashes[h] = l
+        hash_list = hashes.get(image_hash, [])
+        hash_list.append(imagePath)
+        hashes[image_hash] = hash_list
 
     print("Process {} Serializing".format(payload["id"]))
     f = open(payload["output_path"], "w")
@@ -93,24 +100,24 @@ def process_images(payload):
     f.close()
 
 
-def technique2(payloads):
+def processes_technique(images):
     # ================================================
     # MULTIPROCESSING USING DIFFERENT PROCESSES
     print("Launching Pool using {} Processors".format(procs))
     pool = Pool(processes=procs)
-    pool.map(process_images, payloads)
+    pool.map(process_images, images)
     print("Waiting for processes to finish...")
     pool.close()
     pool.join()
 
 
-def technique3(payloads):
+def threads_technique(images):
     # ================================================
     # THREADING TECHNIQUE USING THREADS
     print("Launching {} Threads".format(procs))
     threads = []
 
-    for payload in payloads:
+    for payload in images:
         thread = threading.Thread(target=process_images, args=(payload,))
         threads.append(thread)
 
@@ -122,17 +129,18 @@ def technique3(payloads):
         thread.join()
 
 
-def technique4(payloads):
+def threads_and_processes_technique(images):
     # ================================================
     # BOTH THREADING AND MULTIPROCESSING
     print("Launching Pool using {} Processors".format(procs))
     pool = Pool(processes=procs)
-    pool.map(process_images_threads, payloads)
+    pool.map(process_images_processes_threads, images)
     print("Waiting for processes to finish...")
     pool.close()
     pool.join()
 
 
+#   Resests output folder to avoid mixing inputs between techniques.
 def deletefiles():
     for file in os.listdir("output"):
         file_path = os.path.join("output", file)
@@ -141,19 +149,19 @@ def deletefiles():
                 os.unlink(file_path)
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
-        except Exception as e:
-            print('Failed to delete %s. Reason: %s' % (file_path, e))
+        except Exception as error:
+            print('Failed to delete %s. Reason: %s' % (file_path, error))
 
 
 if __name__ == "__main__":
 
     deletefiles()
 
-    # CHANGE NUMBER OF CPUS/THREADS FOR TECHNIQUE 2 and 3 HERE
+    # CHANGE NUMBER OF CPUS/THREADS FOR TECHNIQUES 1 and 2 HERE
     procs = cpu_count()
 
     print("Collecting Image Paths...")
-    allImagePaths = sorted(list(paths.list_images('101_ObjectCategories')))
+    allImagePaths = sorted(list(paths.list_images('Input_Images')))
     numImagesPerProc = len(allImagePaths) / float(procs)
     numImagesPerProc = int(np.ceil(numImagesPerProc))
 
@@ -161,6 +169,7 @@ if __name__ == "__main__":
 
     payloads = []
 
+    #   Build payloads by having a list of objects which each contain an id, an output path, and a list of input paths for the images.
     for (i, imagepPaths) in enumerate(chunkedPaths):
         outputPath = os.path.sep.join(["output", "proc_{}.json".format(i)])
         data = {
@@ -174,13 +183,12 @@ if __name__ == "__main__":
 
     # COMMENT OUT THE UNUSED TECHNIQUES
 
-    # technique2(payloads)
+    processes_technique(payloads)
 
-    technique3(payloads)
+    # threads_technique(payloads)
 
-    # technique4(payloads)
+    # threads_and_processes_technique(payloads)
 
     print("Multiprocessing Complete")
     print("Time Taken:")
     print(time.time() - start_time)
-
