@@ -1,6 +1,6 @@
 # Parallel-Image-Hashing
 
-Small project about different methods to use parallel processing to hash images.
+Small project about different methods to use parallel processing to hash images. To use this, place images in a directory named "input_images" in the same directory as the python script. The python script will automatically generate a directory named "output" where the json hash files will be written to.
 
 [Parallel Image Hash](Parallel_ImageHash.py) uses three different techniques to achieve a speedup on image hashing. 
 
