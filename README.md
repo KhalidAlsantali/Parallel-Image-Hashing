@@ -13,5 +13,5 @@ One processor uses multiple threads as set in code and each thread hashes an equ
 # Technique 3: Both threads and processes
 This technique combines both techniques such that each processor has a minimum downtime and can work 100% of the runtime of the program. Slightly faster than technique 1.
 
-
+# Sequential technique
 [Sequential Image Hash](Sequential_ImageHash.py) is just as it sounds. One processor using one threads sequentially moving through each image and hashing it.
